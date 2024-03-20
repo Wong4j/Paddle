@@ -1127,14 +1127,24 @@ void FusedBiasDropoutResidualLnGradInferMeta(
 void FusedDotProductAttentionInferMeta(const MetaTensor& q,
                                        const MetaTensor& k,
                                        const MetaTensor& v,
+                                       const MetaTensor& cu_seqlen_q,
+                                       const MetaTensor& cu_seqlen_kv,
+                                       const MetaTensor& bias,
                                        MetaTensor* out,
                                        MetaTensor* softmax_out,
                                        MetaTensor* rng_state) {
   // q input shape: [batch_size, q_seq_len, num_heads, head_size]
   // k, v input shape: [batch_size, kv_seq_len, num_heads, head_size]
+  // cu_seqlen_q and cu_seqlen_kv input shape: [batch_size+1]
+  // bias shape: [b,1,s_q,s_kv] or [b,h,s_q,s_kv] or [1,1,s_q,s_kv]
   auto q_dim = q.dims();
   auto k_dim = k.dims();
   auto v_dim = v.dims();
+  auto batch_size = q_dim[0];
+  auto q_seqlen = q_dim[1];
+  auto k_seqlen = k_dim[1];
+  auto num_heads = q_dim[2];
+  auto head_size = q_dim[3];
 
   // check shape
   PADDLE_ENFORCE(q_dim.size() == 4 && k_dim.size() == 4 && v_dim.size() == 4,
@@ -1156,6 +1166,25 @@ void FusedDotProductAttentionInferMeta(const MetaTensor& q,
                      k_dim[0],
                      v_dim[0]));
 
+  PADDLE_ENFORCE(cu_seqlen_q.dims().size() == 1 &&
+                     cu_seqlen_kv.dims().size() == 1 &&
+                     cu_seqlen_q.dims()[0] == batch_size + 1 &&
+                     cu_seqlen_kv.dims()[0] == batch_size + 1,
+                 phi::errors::InvalidArgument(
+                     "The dimensions of cu_seqlen_q, cu_seqlen_kv must be 1"
+                     "(batch_size+1)"));
+
+  if (bias) {
+    PADDLE_ENFORCE(bias.dims().size() == 4 &&
+                       (bias.dims()[0] == batch_size || bias.dims()[0] == 1) &&
+                       (bias.dims()[1] == 1 || bias.dims()[1] == num_heads) &&
+                       (bias.dims()[2] == q_seqlen) &&
+                       (bias.dims()[3] == k_seqlen),
+                   phi::errors::InvalidArgument(
+                       "The dimensions of bias must have shape [b,1,s_q,s_kv] "
+                       "or [b,h,s_q,s_kv] or [1,1,s_q,s_kv]"));
+  }
+
   // [batch_size, num_heads, q_seqlen, 1]
   std::vector<int64_t> softmax_out_shape({q_dim[0], q_dim[2], q_dim[1], 1});
 
@@ -1171,15 +1200,19 @@ void FusedDotProductAttentionInferMeta(const MetaTensor& q,
 void FusedDotProductAttentionGradInferMeta(const MetaTensor& q,
                                            const MetaTensor& k,
                                            const MetaTensor& v,
+                                           const MetaTensor& bias,
                                            MetaTensor* q_grad,
                                            MetaTensor* k_grad,
-                                           MetaTensor* v_grad) {
-  auto q_dim = q.dims();
-  auto k_dim = k.dims();
-  auto v_dim = v.dims();
-  q_grad->set_dims(q_dim);
-  k_grad->set_dims(k_dim);
-  v_grad->set_dims(v_dim);
+                                           MetaTensor* v_grad,
+                                           MetaTensor* bias_grad) {
+  q_grad->share_meta(q);
+  k_grad->share_meta(k);
+  v_grad->share_meta(v);
+  if (bias) {
+    if (bias_grad) {
+      bias_grad->share_meta(bias);
+    }
+  }
 }
 
 void FusedFeedForwardInferMeta(const MetaTensor& x,

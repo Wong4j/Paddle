@@ -62,8 +62,8 @@ void generateMatrixStrides(int64_t b,
                            int64_t s_kv,
                            int64_t d,
                            int64_t *strideA,
-                           MHA_Layout layout,
-                           MHA_Matrix matrix) {
+                           NVTE_QKV_Layout layout,
+                           NVTE_QKV_Matrix matrix) {
   constexpr int batch_dim_idx = 0;
   constexpr int head_dim_idx = 1;
   constexpr int seqlen_dim_idx = 2;
@@ -75,106 +75,77 @@ void generateMatrixStrides(int64_t b,
   constexpr int seqlen_q_dim_idx = 2;
   constexpr int seqlen_kv_dim_idx = 3;
 
-  // to be deprecated in the future
-  switch (matrix) {
-    case MHA_Matrix::Q_Matrix:
-      if (layout == MHA_Layout::QKV_INTERLEAVED) {
-        strideA[hidden_dim_idx] = 1;
-        strideA[seqlen_dim_idx] = 3 * h * d;
-        strideA[head_dim_idx] = d;
+  switch (layout) {
+    case NVTE_QKV_Layout::NVTE_BS3HD:
+      if ((matrix == NVTE_QKV_Matrix::NVTE_Q_Matrix) ||
+          (matrix == NVTE_QKV_Matrix::NVTE_K_Matrix) ||
+          (matrix == NVTE_QKV_Matrix::NVTE_V_Matrix)) {
         strideA[batch_dim_idx] = s_q * 3 * h * d;
-      } else if ((layout == MHA_Layout::KV_INTERLEAVED) ||
-                 (layout == MHA_Layout::NOT_INTERLEAVED)) {
-        strideA[hidden_dim_idx] = 1;
-        strideA[seqlen_dim_idx] = h * d;
         strideA[head_dim_idx] = d;
+        strideA[seqlen_dim_idx] = 3 * h * d;
+        strideA[hidden_dim_idx] = 1;
+      } else if ((matrix == NVTE_QKV_Matrix::NVTE_K_Matrix_Transpose) ||
+                 (matrix == NVTE_QKV_Matrix::NVTE_V_Matrix_Transpose)) {
+        strideA[batch_dim_idx] = s_q * 3 * h * d;
+        strideA[head_dim_idx] = d;
+        strideA[seqlen_transpose_dim_idx] = 3 * h * d;
+        strideA[hidden_transpose_dim_idx] = 1;
+      } else if (matrix == NVTE_QKV_Matrix::NVTE_O_Matrix) {
         strideA[batch_dim_idx] = s_q * h * d;
-      }
-      break;
-    case MHA_Matrix::K_Matrix:
-      if (layout == MHA_Layout::QKV_INTERLEAVED) {
-        strideA[seqlen_dim_idx] = 3 * h * d;
-        strideA[hidden_dim_idx] = 1;
         strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * 3 * h * d;
-      } else if (layout == MHA_Layout::KV_INTERLEAVED) {
-        strideA[seqlen_dim_idx] = 2 * h * d;
-        strideA[hidden_dim_idx] = 1;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * 2 * h * d;
-      } else if (layout == MHA_Layout::NOT_INTERLEAVED) {
         strideA[seqlen_dim_idx] = h * d;
         strideA[hidden_dim_idx] = 1;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * h * d;
       }
       break;
-    case MHA_Matrix::K_Matrix_Transpose:
-      if (layout == MHA_Layout::QKV_INTERLEAVED) {
-        strideA[seqlen_transpose_dim_idx] = 3 * h * d;
-        strideA[hidden_transpose_dim_idx] = 1;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * 3 * h * d;
-      } else if (layout == MHA_Layout::KV_INTERLEAVED) {
-        strideA[seqlen_transpose_dim_idx] = 2 * h * d;
-        strideA[hidden_transpose_dim_idx] = 1;
-        strideA[head_dim_idx] = d;
+    case NVTE_QKV_Layout::NVTE_BSHD_BS2HD:
+      if ((matrix == NVTE_QKV_Matrix::NVTE_K_Matrix) ||
+          (matrix == NVTE_QKV_Matrix::NVTE_V_Matrix)) {
         strideA[batch_dim_idx] = s_kv * 2 * h * d;
-      } else if (layout == MHA_Layout::NOT_INTERLEAVED) {
-        strideA[seqlen_transpose_dim_idx] = h * d;
-        strideA[hidden_transpose_dim_idx] = 1;
         strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * h * d;
-      }
-      break;
-    case MHA_Matrix::V_Matrix:
-      if (layout == MHA_Layout::QKV_INTERLEAVED) {
-        strideA[hidden_dim_idx] = 1;
-        strideA[seqlen_dim_idx] = 3 * h * d;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * 3 * h * d;
-      } else if (layout == MHA_Layout::KV_INTERLEAVED) {
-        strideA[hidden_dim_idx] = 1;
         strideA[seqlen_dim_idx] = 2 * h * d;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * 2 * h * d;
-      } else if (layout == MHA_Layout::NOT_INTERLEAVED) {
         strideA[hidden_dim_idx] = 1;
-        strideA[seqlen_dim_idx] = h * d;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * h * d;
-      }
-      break;
-    case MHA_Matrix::V_Matrix_Transpose:
-      if (layout == MHA_Layout::QKV_INTERLEAVED) {
-        strideA[hidden_transpose_dim_idx] = 1;
-        strideA[seqlen_transpose_dim_idx] = 3 * h * d;
-        strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * 3 * h * d;
-      } else if (layout == MHA_Layout::KV_INTERLEAVED) {
-        strideA[hidden_transpose_dim_idx] = 1;
-        strideA[seqlen_transpose_dim_idx] = 2 * h * d;
-        strideA[head_dim_idx] = d;
+      } else if ((matrix == NVTE_QKV_Matrix::NVTE_K_Matrix_Transpose) ||
+                 (matrix == NVTE_QKV_Matrix::NVTE_V_Matrix_Transpose)) {
         strideA[batch_dim_idx] = s_kv * 2 * h * d;
-      } else if (layout == MHA_Layout::NOT_INTERLEAVED) {
-        strideA[hidden_transpose_dim_idx] = 1;
-        strideA[seqlen_transpose_dim_idx] = h * d;
         strideA[head_dim_idx] = d;
-        strideA[batch_dim_idx] = s_kv * h * d;
+        strideA[seqlen_transpose_dim_idx] = 2 * h * d;
+        strideA[hidden_transpose_dim_idx] = 1;
+      } else if ((matrix == NVTE_QKV_Matrix::NVTE_Q_Matrix) ||
+                 (matrix == NVTE_QKV_Matrix::NVTE_O_Matrix)) {
+        strideA[batch_dim_idx] = s_q * h * d;
+        strideA[head_dim_idx] = d;
+        strideA[seqlen_dim_idx] = h * d;
+        strideA[hidden_dim_idx] = 1;
       }
       break;
-    case MHA_Matrix::S_Matrix:
-      strideA[seqlen_kv_dim_idx] = 1;
-      strideA[seqlen_q_dim_idx] = s_kv;
-      strideA[head_dim_idx] = s_q * s_kv;
-      strideA[batch_dim_idx] = h * s_q * s_kv;
+    case NVTE_QKV_Layout::NVTE_BSHD_BSHD_BSHD:
+      if ((matrix == NVTE_QKV_Matrix::NVTE_Q_Matrix) ||
+          (matrix == NVTE_QKV_Matrix::NVTE_O_Matrix)) {
+        strideA[batch_dim_idx] = s_q * h * d;
+        strideA[head_dim_idx] = d;
+        strideA[seqlen_dim_idx] = h * d;
+        strideA[hidden_dim_idx] = 1;
+      } else if ((matrix == NVTE_QKV_Matrix::NVTE_K_Matrix) ||
+                 (matrix == NVTE_QKV_Matrix::NVTE_V_Matrix)) {
+        strideA[batch_dim_idx] = s_kv * h * d;
+        strideA[head_dim_idx] = d;
+        strideA[seqlen_dim_idx] = h * d;
+        strideA[hidden_dim_idx] = 1;
+      } else if ((matrix == NVTE_QKV_Matrix::NVTE_K_Matrix_Transpose) ||
+                 (matrix == NVTE_QKV_Matrix::NVTE_V_Matrix_Transpose)) {
+        strideA[batch_dim_idx] = s_kv * h * d;
+        strideA[head_dim_idx] = d;
+        strideA[seqlen_transpose_dim_idx] = h * d;
+        strideA[hidden_transpose_dim_idx] = 1;
+      }
       break;
-    case MHA_Matrix::O_Matrix:
-      strideA[seqlen_kv_dim_idx] = 1;
-      strideA[seqlen_q_dim_idx] = h * d;
-      strideA[head_dim_idx] = d;
-      strideA[batch_dim_idx] = s_q * h * d;
-      break;
+  }
+
+  if (matrix == NVTE_QKV_Matrix::NVTE_S_Matrix) {
+    strideA[seqlen_kv_dim_idx] = 1;
+    strideA[seqlen_q_dim_idx] = s_kv;
+    strideA[head_dim_idx] = s_q * s_kv;
+    strideA[batch_dim_idx] = h * s_q * s_kv;
   }
 }
 
@@ -1413,6 +1384,694 @@ void fused_attn_arbitrary_seqlen_fwd(
     } else {
       VLOG(10) << "[ERROR] Exception " << e.what();
     }
+  }
+}
+
+void fused_attn_arbitrary_seqlen_fwd_impl(int64_t b,
+                                          int64_t h,
+                                          int64_t hg,
+                                          int64_t s_q,
+                                          int64_t s_kv,
+                                          int64_t d,
+                                          int64_t bias_b,
+                                          int64_t bias_h,
+                                          bool is_training,
+                                          float scaling_factor,
+                                          float dropout_probability,
+                                          MHA_Layout layout,
+                                          MHA_Bias_Type bias_type,
+                                          MHA_Mask_Type mask_type,
+                                          void *devPtrQ,
+                                          void *devPtrK,
+                                          void *devPtrV,
+                                          void *devPtrBias,
+                                          void *devPtrSoftmaxStats,
+                                          void *devPtrO,
+                                          void *devPtrDropoutSeed,
+                                          void *devPtrDropoutOffset,
+                                          void *devPtrCuSeqlensQ,
+                                          void *devPtrCuSeqlensKV,
+                                          cudnn_frontend::DataType_t tensorType,
+                                          void *workspace,
+                                          size_t *workspace_size,
+                                          cudaStream_t stream,
+                                          cudnnHandle_t handle) {
+  bool is_bias = (bias_type == NVTE_Bias_Type::NVTE_POST_SCALE_BIAS);
+  bool is_alibi = (bias_type == NVTE_Bias_Type::NVTE_ALIBI);
+  bool is_causal = ((mask_type == NVTE_Mask_Type::NVTE_CAUSAL_MASK) ||
+                    (mask_type == NVTE_Mask_Type::NVTE_PADDING_CAUSAL_MASK));
+  bool is_padding = ((mask_type == NVTE_Mask_Type::NVTE_PADDING_MASK) ||
+                     (mask_type == NVTE_Mask_Type::NVTE_PADDING_CAUSAL_MASK));
+  bool is_dropout = (is_training && dropout_probability != 0.0f);
+
+  try {
+    FADescriptor_v1 descriptor{b,
+                               h,
+                               hg,
+                               s_q,
+                               s_kv,
+                               d,
+                               bias_b,
+                               bias_h,
+                               scaling_factor,
+                               is_training,
+                               dropout_probability,
+                               layout,
+                               bias_type,
+                               mask_type,
+                               tensorType};
+
+    namespace fe = cudnn_frontend;
+    using graph_and_tensors = std::tuple<
+        std::shared_ptr<fe::graph::Graph>,
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // Q
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // K
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // V
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // attn_scale
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // O
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // Stats
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // bias
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // seq_q
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // seq_kv
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dropout_seed
+        std::shared_ptr<fe::graph::Tensor_attributes>>;  // dropout_offset
+
+    using CacheType = std::map<FADescriptor_v1, graph_and_tensors>;
+    static thread_local CacheType sdpa_f16_fprop_cache;
+
+    // Get plan from cache if cache is available, otherwise create one
+    auto get_graph =
+        [&](CacheType &cache,
+            const FADescriptor_v1 &descriptor) -> graph_and_tensors {
+      // if hit, return
+      auto it = cache.find(descriptor);
+      if (it != cache.end()) {
+        auto graph = it->second;
+        return graph;
+      }
+
+      // otherwise, build the op_graph and the plan. Then update cache
+      auto mha_graph = std::make_shared<fe::graph::Graph>();
+      mha_graph->set_io_data_type(tensorType)
+          .set_intermediate_data_type(fe::DataType_t::FLOAT)
+          .set_compute_data_type(fe::DataType_t::FLOAT);
+
+      std::shared_ptr<fe::graph::Tensor_attributes> Q, K, V, attn_scale;
+      std::shared_ptr<fe::graph::Tensor_attributes> bias, seq_q, seq_kv;
+      std::shared_ptr<fe::graph::Tensor_attributes> dropout_seed,
+          dropout_offset;
+
+      std::vector<int64_t> q_stride(4);
+      std::vector<int64_t> k_stride(4);
+      std::vector<int64_t> v_stride(4);
+      generateMatrixStrides(b,
+                            h,
+                            s_q,
+                            s_kv,
+                            d,
+                            q_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_Q_Matrix);
+      generateMatrixStrides(b,
+                            hg,
+                            s_q,
+                            s_kv,
+                            d,
+                            k_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_K_Matrix);
+      generateMatrixStrides(b,
+                            hg,
+                            s_q,
+                            s_kv,
+                            d,
+                            v_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_V_Matrix);
+      Q = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("Q")
+                                .set_dim({b, h, s_q, d})
+                                .set_stride(q_stride));
+      K = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("K")
+                                .set_dim({b, hg, s_kv, d})
+                                .set_stride(k_stride));
+      V = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("V")
+                                .set_dim({b, hg, s_kv, d})
+                                .set_stride(v_stride));
+
+      attn_scale = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                         .set_name("attn_scale")
+                                         .set_dim({1, 1, 1, 1})
+                                         .set_stride({1, 1, 1, 1})
+                                         .set_is_pass_by_value(true)
+                                         .set_data_type(fe::DataType_t::FLOAT));
+
+      fe::graph::SDPA_attributes sdpa_options;
+      sdpa_options = fe::graph::SDPA_attributes()
+                         .set_name("flash_attention")
+                         .set_is_inference(!is_training)
+                         .set_causal_mask(is_causal)
+                         .set_attn_scale(attn_scale);
+
+      sdpa_options.set_alibi_mask(is_alibi);
+
+      if (is_bias) {
+        bias = mha_graph->tensor(
+            fe::graph::Tensor_attributes()
+                .set_name("bias")
+                .set_dim({bias_b, bias_h, s_q, s_kv})
+                .set_stride({bias_h * s_q * s_kv, s_q * s_kv, s_kv, 1}));
+        sdpa_options.set_bias(bias);
+      }
+
+      if (is_padding) {
+        seq_q = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                      .set_name("seq_q")
+                                      .set_dim({b, 1, 1, 1})
+                                      .set_stride({1, 1, 1, 1})
+                                      .set_data_type(fe::DataType_t::INT32));
+        seq_kv = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                       .set_name("seq_kv")
+                                       .set_dim({b, 1, 1, 1})
+                                       .set_stride({1, 1, 1, 1})
+                                       .set_data_type(fe::DataType_t::INT32));
+        sdpa_options.set_padding_mask(is_padding)
+            .set_seq_len_q(seq_q)
+            .set_seq_len_kv(seq_kv);
+      }
+
+      if (is_dropout) {
+        dropout_seed =
+            mha_graph->tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Seed")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT64));
+        dropout_offset =
+            mha_graph->tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Offset")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT64));
+        sdpa_options.set_dropout(
+            dropout_probability, dropout_seed, dropout_offset);
+      }
+
+      auto [O, Stats] = mha_graph->sdpa(Q, K, V, sdpa_options);
+
+      std::vector<int64_t> o_stride(4);
+      generateMatrixStrides(b,
+                            h,
+                            s_q,
+                            s_kv,
+                            d,
+                            o_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_O_Matrix);
+      O->set_output(true).set_dim({b, h, s_q, d}).set_stride(o_stride);
+
+      if (is_training) {
+        Stats->set_output(true)
+            .set_data_type(fe::DataType_t::FLOAT)
+            .set_dim({b, h, s_q, 1})
+            .set_stride({h * s_q, s_q, 1, 1});
+      }
+
+      std::tuple<std::shared_ptr<fe::graph::Tensor_attributes>,  // Q
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // K
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // V
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // attn_scale
+                 std::shared_ptr<fe::graph::Tensor_attributes>>  // O
+          key_tensors_tuple = std::make_tuple(Q, K, V, attn_scale, O);
+      auto Stats_tuple =
+          is_training ? std::make_tuple(Stats) : std::make_tuple(nullptr);
+      auto bias_tuple =
+          is_bias ? std::make_tuple(bias) : std::make_tuple(nullptr);
+      auto padding_tuple = is_padding ? std::make_tuple(seq_q, seq_kv)
+                                      : std::make_tuple(nullptr, nullptr);
+      auto dropout_tuple = is_dropout
+                               ? std::make_tuple(dropout_seed, dropout_offset)
+                               : std::make_tuple(nullptr, nullptr);
+      auto return_empty_tuple = std::tuple_cat(std::make_tuple(nullptr),
+                                               key_tensors_tuple,
+                                               Stats_tuple,
+                                               bias_tuple,
+                                               padding_tuple,
+                                               dropout_tuple);
+
+      NVTE_CHECK_CUDNN_FE(mha_graph->validate());
+      NVTE_CHECK_CUDNN_FE(mha_graph->build_operation_graph(handle));
+      NVTE_CHECK_CUDNN_FE(
+          mha_graph->create_execution_plans({fe::HeurMode_t::A}));
+      NVTE_CHECK_CUDNN_FE(mha_graph->check_support(handle));
+      NVTE_CHECK_CUDNN_FE(mha_graph->build_plans(handle));
+
+      auto return_tuple = std::tuple_cat(std::make_tuple(mha_graph),
+                                         key_tensors_tuple,
+                                         Stats_tuple,
+                                         bias_tuple,
+                                         padding_tuple,
+                                         dropout_tuple);
+      cache.insert({descriptor, return_tuple});
+
+      return return_tuple;
+    };
+
+    auto [mha_graph,
+          Q,
+          K,
+          V,
+          attn_scale,
+          O,
+          Stats,
+          bias,
+          seq_q,
+          seq_kv,
+          dropout_seed,
+          dropout_offset] = get_graph(sdpa_f16_fprop_cache, descriptor);
+
+    auto plan_workspace_size = mha_graph->get_workspace_size();
+
+    // Exit to request upper level API to allocate memory if needed
+    size_t actual_seqlen_workspace_size = 2 * b * sizeof(int32_t);
+    if (workspace == nullptr) {
+      *workspace_size = plan_workspace_size + actual_seqlen_workspace_size;
+      return;
+    }
+
+    // cuDNN stream check needs to be moved here to support dummy kernel calls
+    // with null streams for sizing the cuDNN workspace.
+    NVTE_CHECK_CUDNN(cudnnSetStream(handle, stream));
+
+    // Build variant pack
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void *>
+        variant_pack = {{Q, devPtrQ},
+                        {K, devPtrK},
+                        {V, devPtrV},
+                        {attn_scale, &scaling_factor},
+                        {O, devPtrO}};
+
+    if (is_training) {
+      variant_pack[Stats] = devPtrSoftmaxStats;
+    }
+
+    if (is_bias) {
+      variant_pack[bias] = devPtrBias;
+    }
+
+    if (is_padding) {
+      constexpr size_t nthreads_per_block = 128;
+      const size_t grid = (b + nthreads_per_block - 1) / nthreads_per_block;
+      void *devActualSeqlenQ =
+          static_cast<int8_t *>(workspace) + plan_workspace_size;
+      void *devActualSeqlenKV =
+          static_cast<int8_t *>(devActualSeqlenQ) + b * sizeof(int32_t);
+      cu_seqlens_to_actual_seqlens<<<grid, nthreads_per_block, 0, stream>>>(
+          b,
+          static_cast<const int32_t *>(devPtrCuSeqlensQ),
+          static_cast<const int32_t *>(devPtrCuSeqlensKV),
+          static_cast<int32_t *>(devActualSeqlenQ),
+          static_cast<int32_t *>(devActualSeqlenKV));
+      variant_pack[seq_q] = devActualSeqlenQ;
+      variant_pack[seq_kv] = devActualSeqlenKV;
+    }
+
+    if (is_dropout) {
+      variant_pack[dropout_seed] = devPtrDropoutSeed;
+      variant_pack[dropout_offset] = devPtrDropoutOffset;
+    }
+
+    NVTE_CHECK_CUDNN_FE(mha_graph->execute(handle, variant_pack, workspace));
+  } catch (cudnn_frontend::cudnnException &e) {
+    NVTE_ERROR(e.what());
+  }
+}
+
+void fused_attn_arbitrary_seqlen_bwd_impl(int64_t b,
+                                          int64_t h,
+                                          int64_t hg,
+                                          int64_t s_q,
+                                          int64_t s_kv,
+                                          int64_t d,
+                                          int64_t bias_b,
+                                          int64_t bias_h,
+                                          float scaling_factor,
+                                          float dropout_probability,
+                                          NVTE_QKV_Layout layout,
+                                          NVTE_Bias_Type bias_type,
+                                          NVTE_Mask_Type mask_type,
+                                          void *devPtrQ,
+                                          void *devPtrKTranspose,
+                                          void *devPtrVTranspose,
+                                          void *devPtrO,
+                                          void *devPtrSoftmaxStats,
+                                          void *devPtrBias,
+                                          void *devPtrdQ,
+                                          void *devPtrdK,
+                                          void *devPtrdV,
+                                          void *devPtrdO,
+                                          void *devPtrdBias,
+                                          void *devPtrDropoutSeed,
+                                          void *devPtrDropoutOffset,
+                                          void *devPtrCuSeqlensQ,
+                                          void *devPtrCuSeqlensKV,
+                                          cudnn_frontend::DataType_t tensorType,
+                                          void *workspace,
+                                          size_t *workspace_size,
+                                          cudaStream_t stream,
+                                          cudnnHandle_t handle) {
+  bool is_bias = (bias_type == NVTE_Bias_Type::NVTE_POST_SCALE_BIAS);
+  bool is_alibi = (bias_type == NVTE_Bias_Type::NVTE_ALIBI);
+  bool is_causal = ((mask_type == NVTE_Mask_Type::NVTE_CAUSAL_MASK) ||
+                    (mask_type == NVTE_Mask_Type::NVTE_PADDING_CAUSAL_MASK));
+  bool is_padding = ((mask_type == NVTE_Mask_Type::NVTE_PADDING_MASK) ||
+                     (mask_type == NVTE_Mask_Type::NVTE_PADDING_CAUSAL_MASK));
+  bool is_dropout = (dropout_probability != 0.0f);
+
+  try {
+    FADescriptor_v1 descriptor{b,
+                               h,
+                               hg,
+                               s_q,
+                               s_kv,
+                               d,
+                               bias_b,
+                               bias_h,
+                               scaling_factor,
+                               true,
+                               dropout_probability,
+                               layout,
+                               bias_type,
+                               mask_type,
+                               tensorType};
+
+    namespace fe = cudnn_frontend;
+    using graph_and_tensors = std::tuple<
+        std::shared_ptr<fe::graph::Graph>,
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // q
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // k
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // v
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // o
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dO
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // stats
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // attn_scale
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dQ
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dK
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dV
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // bias
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dBias
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // seq_q
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // seq_kv
+        std::shared_ptr<fe::graph::Tensor_attributes>,   // dropout_seed
+        std::shared_ptr<fe::graph::Tensor_attributes>>;  // dropout_offset
+
+    using CacheType = std::map<FADescriptor_v1, graph_and_tensors>;
+    static thread_local CacheType sdpa_f16_bprop_cache;
+
+    // Get plan from cache if cache is available, otherwise create one
+    auto get_graph =
+        [&](CacheType &cache,
+            const FADescriptor_v1 &descriptor) -> graph_and_tensors {
+      // if hit, return
+      auto it = cache.find(descriptor);
+      if (it != cache.end()) {
+        auto graph = it->second;
+        return graph;
+      }
+
+      // otherwise, build the op_graph and the plan. Then update cache
+      auto mha_graph = std::make_shared<fe::graph::Graph>();
+      mha_graph->set_io_data_type(tensorType)
+          .set_intermediate_data_type(fe::DataType_t::FLOAT)
+          .set_compute_data_type(fe::DataType_t::FLOAT);
+
+      std::shared_ptr<fe::graph::Tensor_attributes> q, k, v, o, dO, stats,
+          attn_scale;
+      std::shared_ptr<fe::graph::Tensor_attributes> bias, dBias, seq_q, seq_kv;
+      std::shared_ptr<fe::graph::Tensor_attributes> dropout_seed,
+          dropout_offset;
+
+      std::vector<int64_t> q_stride(4);
+      std::vector<int64_t> k_stride(4);
+      std::vector<int64_t> v_stride(4);
+      std::vector<int64_t> o_stride(4);
+      generateMatrixStrides(b,
+                            h,
+                            s_q,
+                            s_kv,
+                            d,
+                            q_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_Q_Matrix);
+      generateMatrixStrides(b,
+                            hg,
+                            s_q,
+                            s_kv,
+                            d,
+                            k_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_K_Matrix);
+      generateMatrixStrides(b,
+                            hg,
+                            s_q,
+                            s_kv,
+                            d,
+                            v_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_V_Matrix);
+      generateMatrixStrides(b,
+                            h,
+                            s_q,
+                            s_kv,
+                            d,
+                            o_stride.data(),
+                            layout,
+                            NVTE_QKV_Matrix::NVTE_O_Matrix);
+      q = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("Q")
+                                .set_dim({b, h, s_q, d})
+                                .set_stride(q_stride));
+      k = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("K")
+                                .set_dim({b, hg, s_kv, d})
+                                .set_stride(k_stride));
+      v = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("V")
+                                .set_dim({b, hg, s_kv, d})
+                                .set_stride(v_stride));
+      o = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                .set_name("O")
+                                .set_dim({b, h, s_q, d})
+                                .set_stride(o_stride));
+      dO = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                 .set_name("dO")
+                                 .set_dim({b, h, s_q, d})
+                                 .set_stride(o_stride));
+      stats = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                    .set_name("stats")
+                                    .set_dim({b, h, s_q, 1})
+                                    .set_stride({h * s_q, s_q, 1, 1})
+                                    .set_data_type(fe::DataType_t::FLOAT));
+
+      attn_scale = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                         .set_name("attn_scale")
+                                         .set_dim({1, 1, 1, 1})
+                                         .set_stride({1, 1, 1, 1})
+                                         .set_is_pass_by_value(true)
+                                         .set_data_type(fe::DataType_t::FLOAT));
+
+      fe::graph::SDPA_backward_attributes sdpa_backward_options;
+      sdpa_backward_options = fe::graph::SDPA_backward_attributes()
+                                  .set_name("flash_attention_backward")
+                                  .set_causal_mask(is_causal)
+                                  .set_attn_scale(attn_scale);
+
+      sdpa_backward_options.set_alibi_mask(is_alibi);
+
+      if (is_bias) {
+        bias = mha_graph->tensor(
+            fe::graph::Tensor_attributes()
+                .set_name("bias")
+                .set_dim({bias_b, bias_h, s_q, s_kv})
+                .set_stride({bias_h * s_q * s_kv, s_q * s_kv, s_kv, 1}));
+        dBias = mha_graph->tensor(
+            fe::graph::Tensor_attributes()
+                .set_name("dBias")
+                .set_dim({bias_b, bias_h, s_q, s_kv})
+                .set_stride({bias_h * s_q * s_kv, s_q * s_kv, s_kv, 1}));
+        sdpa_backward_options.set_bias(bias);
+        // shapes [1, 1, s, s], [b, 1, s, s], [b, h, s, s]
+        // are not supported for dbias calculation but they are
+        // supported for forward bias calculation
+        if ((bias_b == 1) && (bias_h == h)) {
+          sdpa_backward_options.set_dbias(dBias);
+        }
+      }
+
+      if (is_padding) {
+        seq_q = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                      .set_name("seq_q")
+                                      .set_dim({b, 1, 1, 1})
+                                      .set_stride({1, 1, 1, 1})
+                                      .set_data_type(fe::DataType_t::INT32));
+        seq_kv = mha_graph->tensor(fe::graph::Tensor_attributes()
+                                       .set_name("seq_kv")
+                                       .set_dim({b, 1, 1, 1})
+                                       .set_stride({1, 1, 1, 1})
+                                       .set_data_type(fe::DataType_t::INT32));
+        sdpa_backward_options.set_padding_mask(is_padding)
+            .set_seq_len_q(seq_q)
+            .set_seq_len_kv(seq_kv);
+      }
+
+      if (is_dropout) {
+        dropout_seed =
+            mha_graph->tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Seed")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT64));
+        dropout_offset =
+            mha_graph->tensor(fe::graph::Tensor_attributes()
+                                  .set_name("Offset")
+                                  .set_dim({1, 1, 1, 1})
+                                  .set_stride({1, 1, 1, 1})
+                                  .set_data_type(fe::DataType_t::INT64));
+        sdpa_backward_options.set_dropout(
+            dropout_probability, dropout_seed, dropout_offset);
+      }
+
+      auto [dQ, dK, dV] = mha_graph->sdpa_backward(
+          q, k, v, o, dO, stats, sdpa_backward_options);
+
+      dQ->set_output(true).set_dim({b, h, s_q, d}).set_stride(q_stride);
+      dK->set_output(true).set_dim({b, hg, s_kv, d}).set_stride(k_stride);
+      dV->set_output(true).set_dim({b, hg, s_kv, d}).set_stride(v_stride);
+
+      std::tuple<std::shared_ptr<fe::graph::Tensor_attributes>,  // q
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // k
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // v
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // o
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // dO
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // stats
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // attn_scale
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // dQ
+                 std::shared_ptr<fe::graph::Tensor_attributes>,  // dK
+                 std::shared_ptr<fe::graph::Tensor_attributes>>  // dV
+          key_tensors_tuple =
+              std::make_tuple(q, k, v, o, dO, stats, attn_scale, dQ, dK, dV);
+      auto bias_tuple = is_bias ? std::make_tuple(bias, dBias)
+                                : std::make_tuple(nullptr, nullptr);
+      auto padding_tuple = is_padding ? std::make_tuple(seq_q, seq_kv)
+                                      : std::make_tuple(nullptr, nullptr);
+      auto dropout_tuple = is_dropout
+                               ? std::make_tuple(dropout_seed, dropout_offset)
+                               : std::make_tuple(nullptr, nullptr);
+      auto return_empty_tuple = std::tuple_cat(std::make_tuple(nullptr),
+                                               key_tensors_tuple,
+                                               bias_tuple,
+                                               padding_tuple,
+                                               dropout_tuple);
+
+      NVTE_CHECK_CUDNN_FE(mha_graph->validate());
+      NVTE_CHECK_CUDNN_FE(mha_graph->build_operation_graph(handle));
+      NVTE_CHECK_CUDNN_FE(
+          mha_graph->create_execution_plans({fe::HeurMode_t::A}));
+      NVTE_CHECK_CUDNN_FE(mha_graph->check_support(handle));
+      NVTE_CHECK_CUDNN_FE(mha_graph->build_plans(handle));
+
+      auto return_tuple = std::tuple_cat(std::make_tuple(mha_graph),
+                                         key_tensors_tuple,
+                                         bias_tuple,
+                                         padding_tuple,
+                                         dropout_tuple);
+      cache.insert({descriptor, return_tuple});
+
+      return return_tuple;
+    };
+
+    auto [mha_graph,
+          q,
+          k,
+          v,
+          o,
+          dO,
+          stats,
+          attn_scale,
+          dQ,
+          dK,
+          dV,
+          bias,
+          dBias,
+          seq_q,
+          seq_kv,
+          dropout_seed,
+          dropout_offset] = get_graph(sdpa_f16_bprop_cache, descriptor);
+
+    auto plan_workspace_size = mha_graph->get_workspace_size();
+
+    // Exit to request upper level API to allocate memory if needed
+    size_t actual_seqlen_workspace_size = 2 * b * sizeof(int32_t);
+    if (workspace == nullptr) {
+      *workspace_size = plan_workspace_size + actual_seqlen_workspace_size;
+      return;
+    }
+
+    // cuDNN stream check needs to be moved here to support dummy kernel calls
+    // with null streams for sizing the cuDNN workspace.
+    NVTE_CHECK_CUDNN(cudnnSetStream(handle, stream));
+
+    // build variant pack
+    std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void *>
+        variant_pack = {
+            {q, devPtrQ},
+            {k, devPtrKTranspose},
+            {v, devPtrVTranspose},
+            {o, devPtrO},
+            {dO, devPtrdO},
+            {stats, devPtrSoftmaxStats},
+            {attn_scale, &scaling_factor},
+            {dQ, devPtrdQ},
+            {dK, devPtrdK},
+            {dV, devPtrdV},
+        };
+
+    if (is_bias) {
+      variant_pack[bias] = devPtrBias;
+      if ((bias_b == 1) && (bias_h == h)) {
+        variant_pack[dBias] = devPtrdBias;
+      } else {
+        variant_pack[dBias] = nullptr;
+      }
+    }
+
+    if (is_padding) {
+      constexpr size_t nthreads_per_block = 128;
+      const size_t grid = (b + nthreads_per_block - 1) / nthreads_per_block;
+      void *devActualSeqlenQ =
+          static_cast<int8_t *>(workspace) + plan_workspace_size;
+      void *devActualSeqlenKV =
+          static_cast<int8_t *>(devActualSeqlenQ) + b * sizeof(int32_t);
+      cu_seqlens_to_actual_seqlens<<<grid, nthreads_per_block, 0, stream>>>(
+          b,
+          static_cast<const int32_t *>(devPtrCuSeqlensQ),
+          static_cast<const int32_t *>(devPtrCuSeqlensKV),
+          static_cast<int32_t *>(devActualSeqlenQ),
+          static_cast<int32_t *>(devActualSeqlenKV));
+      variant_pack[seq_q] = devActualSeqlenQ;
+      variant_pack[seq_kv] = devActualSeqlenKV;
+    }
+
+    if (is_dropout) {
+      variant_pack[dropout_seed] = devPtrDropoutSeed;
+      variant_pack[dropout_offset] = devPtrDropoutOffset;
+    }
+
+    NVTE_CHECK_CUDNN_FE(mha_graph->execute(handle, variant_pack, workspace));
+  } catch (cudnn_frontend::cudnnException &e) {
+    NVTE_ERROR(e.what());
   }
 }
 
